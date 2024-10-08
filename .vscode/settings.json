@@ -21,5 +21,8 @@
   "[typescriptreact]": {
     "editor.detectIndentation": true,
     "editor.tabSize": 2
+  },
+  "[prisma]": {
+    "editor.defaultFormatter": "Prisma.prisma"
   }
 }
