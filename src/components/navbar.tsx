@@ -8,11 +8,11 @@ const navigation = [
     name: 'Home',
   },
   {
-    link: '/series',
+    link: '/',
     name: 'Series',
   },
   {
-    link: '/movies',
+    link: '/',
     name: 'Movies',
   },
 ]
