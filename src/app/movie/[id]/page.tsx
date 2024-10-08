@@ -106,13 +106,14 @@ export default function MoviePage({
       <div className='flex flex-wrap justify-center'>
         {trailers && trailers.length > 0 ? (
           trailers.map((trailer) => (
-            <div key={trailer.id} className='m-4'>
+            <div key={trailer.id} className='w-full'>
               <h3 className='mb-2 text-xl font-semibold'>{trailer.name}</h3>
 
               <ReactPlayer
                 url={`https://www.youtube.com/embed/${trailer.key}`}
                 controls={true}
                 onStart={() => handleTrailerStart(trailer.id)}
+                width={'100%'}
               />
 
               <div className='flex items-center justify-end gap-5 pt-2'>
