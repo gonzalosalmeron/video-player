@@ -1,10 +1,15 @@
 'use client'
 
-import { useEffect } from 'react'
+import { useCallback, useEffect, useState } from 'react'
 
+import { EyeIcon, HeartIcon } from 'lucide-react'
 import { useRouter } from 'next/navigation'
 import ReactPlayer from 'react-player'
 import trpc from 'trpc'
+
+import { Button } from '@/components/ui/button'
+
+import { cn } from '@/lib/utils'
 
 export default function MoviePage({
   params: { id },
@@ -12,16 +17,58 @@ export default function MoviePage({
   params: { id: string | undefined }
 }) {
   const router = useRouter()
+  const [likedTrailers, setLikedTrailers] = useState<string[]>([])
 
-  const { data, error, isLoading } = trpc.getMovie.useQuery({
-    movieId: id as string,
+  const {
+    data,
+    error,
+    isLoading,
+    refetch: refetchMovie,
+  } = trpc.getMovie.useQuery(
+    {
+      movieId: id as string,
+    },
+    {
+      enabled: !!id,
+    }
+  )
+
+  const incrementViews = trpc.incrementViews.useMutation({
+    onSuccess: () => refetchMovie(),
+  })
+
+  const toggleLikeMutation = trpc.toggleLike.useMutation({
+    onSuccess: () => refetchMovie(),
   })
 
   useEffect(() => {
     if (!id) {
-      router.push('/') // redirect to / if no id is found
+      router.push('/')
     }
+
+    const storedLikes = JSON.parse(
+      localStorage.getItem('likedTrailers') || '[]'
+    )
+    setLikedTrailers(storedLikes)
   }, [id, router])
+
+  const toggleLike = (trailerId: string) => {
+    const isLiked = likedTrailers.includes(trailerId)
+    const updatedLikes = isLiked
+      ? likedTrailers.filter((like) => like !== trailerId)
+      : [...likedTrailers, trailerId]
+
+    localStorage.setItem('likedTrailers', JSON.stringify(updatedLikes))
+    toggleLikeMutation.mutate({ trailerId, liked: !isLiked })
+    setLikedTrailers(updatedLikes)
+  }
+
+  const handleTrailerStart = useCallback(
+    (trailerId: string) => {
+      incrementViews.mutate({ trailerId })
+    },
+    [incrementViews]
+  )
 
   if (isLoading) {
     return (
@@ -57,15 +104,38 @@ export default function MoviePage({
       <p className='mb-4 text-lg'>{movie.overview}</p>
 
       <div className='flex flex-wrap justify-center'>
-        {trailers && trailers?.length > 0 ? (
-          trailers?.map((trailer) => (
+        {trailers && trailers.length > 0 ? (
+          trailers.map((trailer) => (
             <div key={trailer.id} className='m-4'>
               <h3 className='mb-2 text-xl font-semibold'>{trailer.name}</h3>
 
               <ReactPlayer
                 url={`https://www.youtube.com/embed/${trailer.key}`}
                 controls={true}
+                onStart={() => handleTrailerStart(trailer.id)}
               />
+
+              <div className='flex items-center justify-end gap-5 pt-2'>
+                <div className='flex items-center gap-2'>
+                  <EyeIcon className='h-4 w-4' />
+                  <span>{trailer.views}</span>
+                </div>
+                <Button
+                  onClick={() => toggleLike(trailer.id)}
+                  disabled={toggleLikeMutation.isPending}
+                >
+                  <HeartIcon
+                    className={cn(
+                      'mr-2 h-4 w-4',
+                      likedTrailers.includes(trailer.id) && 'fill-red-600'
+                    )}
+                  />
+                  <span className='mr-2'>{trailer.likes}</span>
+                  <span>
+                    {likedTrailers.includes(trailer.id) ? 'Unlike' : 'Like'}
+                  </span>
+                </Button>
+              </div>
             </div>
           ))
         ) : (

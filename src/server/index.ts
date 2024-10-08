@@ -1,65 +1,112 @@
 import { publicProcedure, router } from './trpc'
 import { z } from 'zod'
 
+import prisma from '@/lib/db'
 import { MovieDetails, ResponseTMDB, VideosResponse } from '@/types'
 
 const apiUrl = process.env.TMDB_URL ?? ''
 const apiKey = process.env.TMDB_API_KEY ?? ''
 
+const fetchTMDB = async <T>(endpoint: string): Promise<T> => {
+  const url = `${apiUrl}${endpoint}?api_key=${apiKey}`
+  const res = await fetch(url)
+  if (!res.ok) {
+    throw new Error(`TMDB API request failed: ${res.statusText}`)
+  }
+  return res.json()
+}
+
 export const appRouter = router({
   getMovies: publicProcedure.query(async () => {
     try {
-      const res = await fetch(`${apiUrl}/movie/popular?api_key=${apiKey}`)
-      const data: ResponseTMDB = await res.json()
-      return data
+      return await fetchTMDB<ResponseTMDB>('/movie/popular')
     } catch (error) {
       console.error('Error fetching movies:', error)
       throw new Error('Failed to fetch movies')
     }
   }),
   getMovie: publicProcedure
-    .input(
-      z.object({
-        movieId: z.string(),
-      })
-    )
+    .input(z.object({ movieId: z.string() }))
     .query(async ({ input }) => {
-      const { movieId } = input
-
       try {
-        // fetch movie details and trailers concurrently
-        const [movieRes, videosRes] = await Promise.all([
-          fetch(`${apiUrl}/movie/${movieId}?api_key=${apiKey}`),
-          fetch(`${apiUrl}/movie/${movieId}/videos?api_key=${apiKey}`),
+        const [movie, videos] = await Promise.all([
+          fetchTMDB<MovieDetails>(`/movie/${input.movieId}`),
+          fetchTMDB<VideosResponse>(`/movie/${input.movieId}/videos`),
         ])
 
-        // check if both responses are successful
-        if (!movieRes.ok || !videosRes.ok) {
-          throw new Error(
-            `Failed to fetch movie or trailers for ID: ${movieId}`
-          )
-        }
+        const trailers =
+          videos.results?.filter((video) => video.type === 'Trailer') || []
 
-        const movieData: MovieDetails = await movieRes.json()
-        const videosData: VideosResponse = await videosRes.json()
+        const trailerStats = await prisma.trailer.findMany({
+          where: {
+            id: {
+              in: trailers.map((trailer) => trailer.id),
+            },
+          },
+          select: {
+            id: true,
+            views: true,
+            likes: true,
+          },
+        })
 
-        if (videosData?.results) {
-          // return just Trailer videos type
-          videosData.results = videosData.results.filter(
-            (video) => video.type === 'Trailer'
-          )
-        }
+        const statsMap = new Map(trailerStats.map((stat) => [stat.id, stat]))
+
+        const trailersWithStats = trailers.map((trailer) => ({
+          ...trailer,
+          views: statsMap.get(trailer.id)?.views || 0,
+          likes: statsMap.get(trailer.id)?.likes || 0,
+        }))
 
         return {
-          movie: movieData,
-          trailers: videosData.results,
+          movie,
+          trailers: trailersWithStats,
         }
       } catch (error) {
         console.error(
-          `Error fetching movie or videos for ID: ${movieId}`,
+          `Error fetching movie or videos for ID: ${input.movieId}`,
           error
         )
         throw new Error('Failed to fetch movie info or videos')
+      }
+    }),
+  incrementViews: publicProcedure
+    .input(z.object({ trailerId: z.string() }))
+    .mutation(async ({ input }) => {
+      try {
+        await prisma.trailer.upsert({
+          where: { id: input.trailerId },
+          update: { views: { increment: 1 } },
+          create: { id: input.trailerId, views: 1 },
+        })
+      } catch (error) {
+        console.error(
+          `Error incrementing views for trailer ID: ${input.trailerId}`,
+          error
+        )
+        throw new Error('Failed to increment trailer views')
+      }
+    }),
+  toggleLike: publicProcedure
+    .input(
+      z.object({
+        trailerId: z.string(),
+        liked: z.boolean(),
+      })
+    )
+    .mutation(async ({ input: { trailerId, liked } }) => {
+      try {
+        await prisma.trailer.upsert({
+          where: { id: trailerId },
+          update: { likes: liked ? { increment: 1 } : { decrement: 1 } },
+          create: { id: trailerId, likes: 1 },
+        })
+      } catch (error) {
+        console.error(
+          `Error incrementing likes for trailer ID: ${trailerId}`,
+          error
+        )
+        throw new Error('Failed to increment trailer likes')
       }
     }),
 })
