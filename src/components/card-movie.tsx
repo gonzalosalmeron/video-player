@@ -7,7 +7,7 @@ export default function CardMovie({ movie }: { movie: Movie }) {
   return (
     <Link
       href={`/movie/${movie?.id}`}
-      className='group relative duration-200 hover:scale-105'
+      className='group relative duration-200 hover:scale-105 overflow-hidden'
     >
       <Image
         src={`${imgBasePath}/${movie?.poster_path}`}
@@ -19,7 +19,7 @@ export default function CardMovie({ movie }: { movie: Movie }) {
         placeholder={`data:image/svg+xml;base64,${toBase64(shimmer(700, 475))}`}
       />
 
-      <div className='absolute inset-x-0 bottom-0 bg-gradient-to-t from-background to-transparent px-4 pb-1 pt-6'>
+      <div className='absolute sm:-bottom-1/2 bottom-0 inset-x-0 duration-200 sm:group-hover:bottom-0 bg-gradient-to-t from-background to-transparent px-4 pb-1 pt-6'>
         <p>{movie?.title}</p>
       </div>
     </Link>
