@@ -1,3 +1,4 @@
+import Provider from './_trcp/Provider'
 import './globals.css'
 import type { Metadata } from 'next'
 import localFont from 'next/font/local'
@@ -29,8 +30,7 @@ export default function RootLayout({
         className={`${geistSans.variable} ${geistMono.variable} container font-sans`}
       >
         <Navbar />
-
-        {children}
+        <Provider>{children}</Provider>
       </body>
     </html>
   )
